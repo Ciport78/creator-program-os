@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOL Finder</title>
+<meta name="description" content="Filter, score and rank creators and KOLs from your own CSV or Excel list. Runs entirely in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+:root{
+  --bg:#f6f5f2;--panel:#ffffff;--ink:#17181c;--muted:#6b6f78;--line:#e4e2dc;
+  --accent:#5b3fd6;--accent-soft:#ece8ff;--on-accent:#ffffff;--good:#127a4a;--good-soft:#e3f5ec;
+  --warn:#9a5b00;--warn-soft:#fff2dc;--bad:#b42318;--bad-soft:#fde8e6;
+  --radius:12px;--shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111216;--panel:#1a1b21;--ink:#ecebe8;--muted:#9a9ea8;--line:#2b2d35;
+    --accent:#a593ff;--accent-soft:#2a2445;--on-accent:#111216;--good:#5fd39b;--good-soft:#16302a;
+    --warn:#f2b45a;--warn-soft:#352816;--bad:#ff8a80;--bad-soft:#3a1d1b;--shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111216;--panel:#1a1b21;--ink:#ecebe8;--muted:#9a9ea8;--line:#2b2d35;
+  --accent:#a593ff;--accent-soft:#2a2445;--on-accent:#111216;--good:#5fd39b;--good-soft:#16302a;
+  --warn:#f2b45a;--warn-soft:#352816;--bad:#ff8a80;--bad-soft:#3a1d1b;--shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 Inter,system-ui,sans-serif}
+header{padding:28px 16px 8px;max-width:1440px;margin:0 auto}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:4px 0 0;max-width:760px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;max-width:1440px;margin:16px auto 0;padding:0 16px;align-items:center}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:999px;font:inherit;font-weight:500;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.status{color:var(--muted);margin-left:auto;font-size:13px}
+main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;max-width:1440px;margin:16px auto 40px;padding:0 16px}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+aside .panel+.panel{margin-top:16px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+.field{margin-top:12px}
+.field:first-of-type{margin-top:0}
+.field>label,.field>.lbl{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+input[type=text],input[type=number],select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;min-width:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;user-select:none;background:var(--bg)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.check{display:flex;align-items:center;gap:8px;font-weight:500;margin-top:14px;font-size:13px}
+.slider{display:grid;grid-template-columns:1fr 34px;gap:8px;align-items:center}
+.slider input{width:100%;accent-color:var(--accent)}
+.slider span{font-family:"JetBrains Mono",monospace;font-size:12px;text-align:right}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media (max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:22px;letter-spacing:-.02em}
+.stat small{color:var(--muted);font-size:12px}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600;cursor:pointer;background:var(--panel)}
+th:hover{color:var(--ink)}
+th.sorted{color:var(--accent)}
+td.num,th.num{text-align:right;font-family:"JetBrains Mono",monospace;font-size:13px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--bg)}
+.name b{display:block}
+.name small{color:var(--muted)}
+.name a{color:inherit}
+td.wrap{white-space:normal;min-width:140px;max-width:220px;font-size:12px;color:var(--muted)}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--line)}
+.score{display:inline-flex;align-items:center;gap:8px}
+.bar{width:56px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.flag{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+.dec-scale{color:var(--good);background:var(--good-soft);border-color:transparent}
+.dec-test{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;color:var(--muted);font-size:13px}
+.hint{font-size:12px;color:var(--muted);margin:10px 0 0}
+.detected{font-size:12px;color:var(--muted);margin-top:8px}
+footer{max-width:1440px;margin:0 auto 32px;padding:0 16px;color:var(--muted);font-size:12px}
+footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>KOL Finder</h1>
+  <p class="sub">Load any creator list (CSV or Excel), filter by platform, niche, region and performance, then rank by a weighted score you control. Columns are detected automatically. Everything runs in your browser, and no data leaves your device.</p>
+</header>
+
+<div class="toolbar">
+  <button class="btn primary" id="uploadBtn">Upload CSV / Excel</button>
+  <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" hidden>
+  <button class="btn" id="sampleBtn">Load sample data</button>
+  <button class="btn" id="templateBtn">Download template</button>
+  <button class="btn" id="exportBtn">Export shortlist</button>
+  <button class="btn" id="themeBtn" aria-label="Toggle light or dark theme">Theme</button>
+  <span class="status" id="status"></span>
+</div>
+
+<main>
+  <aside>
+    <div class="panel">
+      <h2>Filters</h2>
+      <div class="field"><label for="q">Search</label><input type="text" id="q" placeholder="Name, handle, bio, notes"></div>
+      <div class="field" id="platformField"><span class="lbl">Platform</span><div class="chips" id="platformChips"></div></div>
+      <div class="field" id="tierField"><span class="lbl">Tier (followers)</span><div class="chips" id="tierChips"></div></div>
+      <div class="field" id="typesField"><span class="lbl">Creator type</span><div class="chips" id="typesChips"></div></div>
+      <div id="selects"></div>
+      <div id="metricFilters"></div>
+      <label class="check"><input type="checkbox" id="hideFlags" checked> Hide red-flagged creators</label>
+      <button class="btn" id="resetBtn" style="margin-top:14px;width:100%">Reset filters</button>
+      <p class="detected" id="detected"></p>
+    </div>
+    <div class="panel">
+      <h2>Score weights</h2>
+      <div id="weights"></div>
+      <p class="hint">Score is a weighted average (0 to 100) of the signals your file contains. Data-relative metrics such as smart followers are ranked by percentile within the loaded list. Set a weight to 0 to ignore it.</p>
+    </div>
+  </aside>
+
+  <section>
+    <div class="stats">
+      <div class="stat"><b id="sCount">0</b><small>creators matching</small></div>
+      <div class="stat"><b id="sReach">0</b><small id="sReachLbl">combined followers</small></div>
+      <div class="stat"><b id="sMid">n/a</b><small id="sMidLbl">blended CPM</small></div>
+      <div class="stat"><b id="sScore">n/a</b><small>median score</small></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr id="headRow"></tr></thead><tbody id="body"></tbody></table></div>
+    <div class="pager"><span id="pageInfo"></span><button class="btn" id="prevBtn">Prev</button><button class="btn" id="nextBtn">Next</button></div>
+  </section>
+</main>
+
+<footer>
+  Part of <a href="https://github.com/Ciport78/creator-program-os">Creator Program OS</a>. Sample data is fictional. Built by Nika Muraveva, <a href="https://x.com/murmurnika_">@murmurnika_</a>.
+</footer>
+
+<script>
+const SAMPLE_CSV = `name,handle,platform,url,niche,creator_types,region,language,followers,avg_views,engagement_rate,smart_followers,farmer_score,audience_fit,content_quality,brand_safety,rate_usd,contact,notes
+Onyx Lens,@onyx_lens,TikTok,,AI tools,Promoter; Streamer,CIS,RU,715917,207049,1.27,,0.063,5,3,4,6480,,
+Echo Builds,@echo_builds,YouTube,,Crypto,Reviewer; Opinion leader,SEA,ID,353695,99463,3.16,,0.067,5,2,5,2420,,
+Flux Notes,@flux_notes,Instagram,,Gaming,Promoter,North America,EN,173634,12754,2.99,,0.031,4,5,4,500,,
+Tidal Explains,@tidal_explains,X,,Trading,Promoter,North America,EN,2394965,400236,0.47,63288,0.057,2,5,4,5200,,
+Kairo Weekly,@kairo_weekly,TikTok,,Web3 education,Educator,East Asia,ZH,2003,682,2.73,,0.116,2,3,4,10,,
+Nova Codes,@nova_codes,X,,Web3 education,Investor/VC,LATAM,ES,177889,39250,0.81,1916,0.029,2,4,5,340,,
+Haze Studio,@haze_studio,X,,Gaming,Reviewer; Opinion leader,CIS,RU,82604,27634,2.15,3431,0.312,5,5,3,840,,
+Sable Talks,@sable_talks,X,,Productivity,Educator,North America,EN,686538,158535,3.41,2908,0.073,3,4,4,2910,,
+Mira Talks,@mira_talks,X,,Tech reviews,Educator,Turkey,TR,2888886,703873,4.91,88752,0.305,1,5,1,20850,,
+Ember Codes,@ember_codes,X,,Marketing,Promoter,Global,EN,2616,402,4.18,118,0.538,4,2,5,20,,
+Nova Weekly,@nova_weekly,TikTok,,Web3 education,Promoter; Opinion leader,North America,EN,89805,6115,1.17,,0.204,5,2,4,270,,
+Pixel Plays,@pixel_plays,Instagram,,DeFi,Trader/analyst,CIS,RU,1093493,280463,1.46,,0.053,3,5,4,10340,,
+Haze Codes,@haze_codes,TikTok,,Productivity,Educator; Streamer,LATAM,ES,36018,10414,5.61,,0.031,1,4,5,420,,
+Kairo Lens,@kairo_lens,TikTok,,Crypto,Reviewer,Turkey,TR,324479,51459,4.22,,0.025,5,2,4,1350,,
+Cedar Reviews,@cedar_reviews,X,,Crypto,Builder; Streamer,CIS,RU,83929,6892,0.75,2324,0.125,3,2,4,100,,
+Tidal Hub,@tidal_hub,X,,Web3 education,Investor/VC,Global,EN,111289,22903,3.87,4756,0.022,2,2,4,330,,
+Koda Signal,@koda_signal,TikTok,,Gaming,Builder,Turkey,TR,755934,31813,4.48,,0.07,2,3,5,920,,
+Orbit Plays,@orbit_plays,Instagram,,Productivity,Opinion leader,Global,EN,9637,3104,3.13,,0.155,1,5,5,60,,
+Sable Codes,@sable_codes,Twitch,,Crypto,Promoter,Turkey,TR,28415,9943,4.32,,0.448,5,4,5,390,,
+Rook Explains,@rook_explains,X,,Web3 education,Educator; Reviewer,Turkey,TR,89879,27299,2.25,4361,0.046,5,5,4,750,,
+Kairo Hub,@kairo_hub,YouTube,,Productivity,Builder; Promoter,Vietnam,VI,18637,3396,7.95,,0.102,4,2,5,60,,
+Mira Labs,@mira_labs,YouTube,,Web3 education,Opinion leader; Streamer,SEA,ID,338298,43324,0.45,,0.165,5,5,1,740,,
+Moss Alpha,@moss_alpha,Instagram,,Marketing,Streamer,LATAM,ES,761981,82055,2.86,,0.226,5,4,5,3240,,
+Tidal Studio,@tidal_studio,X,,DeFi,Investor/VC,North America,EN,3097,251,7.62,99,0.221,1,2,3,50,,
+Iris Reviews,@iris_reviews,YouTube,,Web3 education,Trader/analyst; Builder,Korea,KO,93186,18251,6.59,,0.162,2,2,3,710,,
+Rook Plays,@rook_plays,Twitch,,Web3 education,Educator; Streamer,North America,EN,1259816,316338,1.02,,0.026,1,3,3,11480,,
+Pike Reviews,@pike_reviews,Twitch,,Design,Streamer,Global,EN,304604,21136,3.18,,0.563,3,4,5,420,,
+Rook Weekly,@rook_weekly,X,,Productivity,Educator,Vietnam,VI,9207,1423,4.86,410,0.032,5,2,3,50,,
+Zephyr Weekly,@zephyr_weekly,Instagram,,Crypto,Reviewer,Korea,KO,180566,63191,2.19,,0.01,4,5,4,1000,,
+Tidal Weekly,@tidal_weekly,YouTube,,Crypto,Investor/VC,Turkey,TR,2052298,298943,1.67,,0.177,2,5,4,8010,,
+Rook Hub,@rook_hub,Instagram,,Trading,Reviewer; Educator,Brazil,PT,17673,3416,3.99,,0.142,1,3,4,90,,
+Rook Insider,@rook_insider,Twitch,,Gaming,Builder,SEA,ID,430452,23911,3.84,,0.443,4,3,5,260,,
+Haze Daily,@haze_daily,YouTube,,Tech reviews,Streamer; Investor/VC,SEA,ID,69728,21403,1.53,,0.01,5,3,5,590,,
+Mira Notes,@mira_notes,TikTok,,Tech reviews,Opinion leader,SEA,ID,2294371,536292,4.01,,0.049,2,3,5,9740,,
+Lumen Builds,@lumen_builds,YouTube,,Marketing,Promoter; Trader/analyst,LATAM,ES,545847,28271,0.52,,0.006,2,4,3,790,,
+Zephyr Lens,@zephyr_lens,TikTok,,DeFi,Streamer; Reviewer,Korea,KO,61134,9437,7.0,,0.129,1,5,5,370,,
+Orbit Talks,@orbit_talks,TikTok,,Marketing,Trader/analyst; Builder,Global,EN,73551,13510,7.04,,0.017,3,4,3,150,,
+Kairo Codes,@kairo_codes,Twitch,,Trading,Builder,Brazil,PT,723659,239806,4.63,,0.064,3,4,1,5800,,
+Lyra Weekly,@lyra_weekly,X,,AI tools,Educator,East Asia,ZH,58266,12094,6.9,1638,0.014,5,4,5,350,,
+Nyx Talks,@nyx_talks,Instagram,,Design,Opinion leader,Brazil,PT,926343,133116,2.91,,0.072,4,4,5,4700,,
+Lyra Reviews,@lyra_reviews,X,,Marketing,Investor/VC,Turkey,TR,53642,10354,5.91,2254,0.185,4,2,4,390,,
+Nova Daily,@nova_daily,TikTok,,AI tools,Reviewer; Streamer,Korea,KO,9500,2562,1.75,,0.013,1,4,4,60,,
+Sable Builds,@sable_builds,TikTok,,Trading,Promoter,North America,EN,3017787,154740,4.58,,0.029,2,4,4,2370,,
+Ember Hub,@ember_hub,X,,DeFi,Reviewer; Investor/VC,Turkey,TR,522173,76259,4.61,25864,0.007,2,2,5,2790,,
+Jet Lens,@jet_lens,X,,Web3 education,Educator; Builder,SEA,ID,89439,15105,7.51,2633,0.218,2,2,3,200,,
+Juno Signal,@juno_signal,YouTube,,AI tools,Investor/VC,CIS,RU,744730,52221,3.7,,0.007,2,2,5,1760,,
+Onyx Studio,@onyx_studio,YouTube,,Crypto,Builder; Streamer,Brazil,PT,651207,217141,2.67,,0.175,2,2,4,4280,,
+Pike Daily,@pike_daily,Twitch,,Gaming,Reviewer,Brazil,PT,495446,92811,3.67,,0.082,4,4,5,2680,,
+`;
+
+/* ---------- Schema: canonical fields and the header names they accept ---------- */
+const FIELDS = {
+  name:{a:["name","display name","creator","creator name","full name","kol","kol name"]},
+  handle:{a:["handle","username","user name","screen name","account","@"]},
+  url:{a:["url","profile url","link","profile link","channel url","profile"]},
+  platform:{a:["platform","network","channel","social network"]},
+  niche:{a:["niche","category","vertical","topic","narrative"]},
+  types:{a:["creator types","creator type","types","tags","labels"],multi:true},
+  account_type:{a:["account type","type of account","entity type"]},
+  status:{a:["outreach flag","status","outreach status","flag","stage"]},
+  region:{a:["region","market","geo"]},
+  country:{a:["country","location"]},
+  language:{a:["language","lang"]},
+  bio:{a:["bio","description","about"]},
+  contact:{a:["contact","email","telegram","contact info"]},
+  notes:{a:["notes","note","comments"]},
+  followers:{a:["followers","follower count","subscribers","subs","audience","followers count"],num:true,label:"Followers"},
+  avg_views:{a:["avg views","average views","avg_views","views","avg impressions","impressions"],num:true,label:"Avg views"},
+  engagement_rate:{a:["engagement rate","er","er %","engagement","engagement_rate"],num:true,label:"ER %"},
+  smart_followers:{a:["smart followers","smart follower count","quality followers"],num:true,label:"Smart followers"},
+  kol_score:{a:["kol score","influence score","creator score"],num:true,label:"KOL score"},
+  farmer_score:{a:["farmer score","bot score","farm score","fake score"],num:true,label:"Farmer score",lowGood:true},
+  signal:{a:["signal","ai signal (30d)","signal (30d)","topic signal"],num:true,label:"Signal"},
+  mindshare:{a:["mindshare","mindshare %","ai mindshare %"],num:true,label:"Mindshare"},
+  audience_fit:{a:["audience fit","fit","audience_fit"],num:true,label:"Fit"},
+  content_quality:{a:["content quality","quality","content_quality"],num:true,label:"Quality"},
+  brand_safety:{a:["brand safety","safety","brand_safety"],num:true,label:"Safety"},
+  rate_usd:{a:["rate usd","rate","price","fee","cost","rate_usd","price usd"],num:true,label:"Rate $"}
+};
+const norm = s => String(s??"").toLowerCase().replace(/[_\-]+/g," ").replace(/\s+/g," ").trim();
+const ALIAS = {};
+for (const k in FIELDS) FIELDS[k].a.concat([k]).forEach(a => ALIAS[norm(a)] = k);
+
+/* ---------- Score signals: each used only if its source column exists ---------- */
+const SIGNALS = {
+  fit:        {label:"Audience fit",      w:30, need:"audience_fit"},
+  influence:  {label:"Influence quality", w:25, need:"smart_followers|kol_score"},
+  topic:      {label:"Topic relevance",   w:20, need:"mindshare|signal"},
+  engagement: {label:"Engagement",        w:15, need:"engagement_rate"},
+  efficiency: {label:"Cost efficiency",   w:15, need:"cpm"},
+  authenticity:{label:"Authenticity",     w:20, need:"farmer_score"},
+  quality:    {label:"Content quality",   w:10, need:"content_quality"},
+  safety:     {label:"Brand safety",      w:10, need:"brand_safety"}
+};
+const TIERS = [
+  {id:"T1",label:"T1 1M+",min:1e6,max:Infinity},
+  {id:"T2",label:"T2 100K+",min:1e5,max:1e6},
+  {id:"T3",label:"T3 10K+",min:1e4,max:1e5},
+  {id:"T4",label:"T4 <10K",min:0,max:1e4}
+];
+const PAGE = 50;
+
+let data = [], present = new Set(), sortKey = "score", sortDir = -1, page = 0, viewRows = [];
+const sel = {platform:new Set(), tier:new Set(), types:new Set()};
+const $ = id => document.getElementById(id);
+const has = f => present.has(f);
+const needMet = n => n.split("|").some(has);
+
+/* ---------- Parsing ---------- */
+function parseCSV(text){
+  const rows=[];let row=[],field="",q=false;
+  text=text.replace(/^﻿/,"");
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; } else field+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){row.push(field);field="";}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(field);field=""; rows.push(row); row=[]; }
+    else field+=c;
+  }
+  row.push(field); rows.push(row);
+  return rows;
+}
+function findHeader(grid){
+  let best=-1,bestHits=0;
+  for(let i=0;i<Math.min(grid.length,30);i++){
+    const hits=(grid[i]||[]).filter(c=>ALIAS[norm(c)]).length;
+    if(hits>bestHits){best=i;bestHits=hits;}
+  }
+  return bestHits>=2?best:-1;
+}
+function num(v){
+  if(v==null||v==="") return null;
+  if(typeof v==="number") return isFinite(v)?v:null;
+  const s=String(v).trim().toLowerCase().replace(/[,$\s%]/g,"");
+  if(!s||s==="-"||s==="n/a"||s==="na") return null;
+  const m=s.match(/^(-?[\d.]+)([kmb])?$/);
+  if(!m) return null;
+  const n=parseFloat(m[1])*({k:1e3,m:1e6,b:1e9}[m[2]]||1);
+  return isFinite(n)?n:null;
+}
+const blank = v => v==null||String(v).trim()===""||String(v).trim()==="-"||String(v).trim().toLowerCase()==="n/a";
+
+function gridToRecords(grid){
+  const h=findHeader(grid);
+  if(h<0) return {err:"Could not find a header row. Make sure one row has column names such as Name, Handle, Followers."};
+  const map=(grid[h]).map(c=>ALIAS[norm(c)]||null);
+  present=new Set(map.filter(Boolean));
+  const recs=[];
+  for(const r of grid.slice(h+1)){
+    if(!r||r.every(blank)) continue;
+    const o={};
+    map.forEach((f,i)=>{ if(f&&o[f]==null){ const v=r[i]; o[f]=FIELDS[f].num?num(v):(blank(v)?"":String(v).trim()); } });
+    if(!o.name&&!o.handle) continue;
+    recs.push(o);
+  }
+  return {recs, header:grid[h]};
+}
+
+/* ---------- Enrichment ---------- */
+function inferPlatform(o){
+  const u=(o.url||"").toLowerCase();
+  if(/x\.com|twitter\.com/.test(u)) return "X";
+  if(/youtube\.com|youtu\.be/.test(u)) return "YouTube";
+  if(/tiktok\.com/.test(u)) return "TikTok";
+  if(/instagram\.com/.test(u)) return "Instagram";
+  if(/twitch\.tv/.test(u)) return "Twitch";
+  if(/t\.me/.test(u)) return "Telegram";
+  return "";
+}
+function percentileFn(key){
+  const vals=data.map(d=>d[key]).filter(v=>v!=null).sort((a,b)=>a-b);
+  return v=>{ if(v==null||!vals.length) return null; let lo=0,hi=vals.length; while(lo<hi){const m=(lo+hi)>>1; if(vals[m]<=v) lo=m+1; else hi=m;} return vals.length===1?1:(lo-1)/(vals.length-1); };
+}
+function enrich(){
+  data.forEach(o=>{
+    if(!o.name) o.name=o.handle;
+    if(!o.platform) o.platform=inferPlatform(o);
+    o.typesArr=o.types?String(o.types).split(/[;|,]/).map(s=>s.trim()).filter(s=>s&&s!=="-"):[];
+    o.tier=o.followers==null?"":(TIERS.find(t=>o.followers>=t.min&&o.followers<t.max)||TIERS[3]).id;
+    o.cpm=(o.rate_usd!=null&&o.avg_views)?o.rate_usd/o.avg_views*1000:null;
+    const f=[];
+    if(o.brand_safety!=null&&o.brand_safety<=2) f.push("Low brand safety");
+    if(o.engagement_rate!=null&&o.engagement_rate>12) f.push("ER looks inflated");
+    if(o.followers&&o.avg_views!=null&&o.avg_views/o.followers<0.01) f.push("Views under 1% of followers");
+    if(o.farmer_score!=null&&o.farmer_score>=0.3) f.push("High farmer score");
+    if(/avoid|blacklist|do not/i.test(o.status||"")) f.push("Status: "+o.status);
+    o.flags=f;
+  });
+  if(data.some(d=>d.cpm!=null)) present.add("cpm");
+  if(data.some(d=>d.platform)) present.add("platform");
+  if(data.some(d=>d.tier)) present.add("tier");
+  const pS=percentileFn("smart_followers"),pK=percentileFn("kol_score"),pM=percentileFn("mindshare"),pG=percentileFn("signal");
+  const avg=a=>{a=a.filter(v=>v!=null);return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;};
+  const clamp=(v,lo,hi)=>v==null?null:Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
+  data.forEach(o=>{
+    o.comp={
+      fit:clamp(o.audience_fit,1,5),
+      influence:avg([pS(o.smart_followers),pK(o.kol_score)]),
+      topic:avg([pM(o.mindshare),pG(o.signal)]),
+      engagement:clamp(o.engagement_rate,0,6),
+      efficiency:o.cpm==null?null:Math.max(0,Math.min(1,(60-o.cpm)/55)),
+      authenticity:o.farmer_score==null?null:1-Math.max(0,Math.min(1,o.farmer_score/0.4)),
+      quality:clamp(o.content_quality,1,5),
+      safety:clamp(o.brand_safety,1,5)
+    };
+  });
+}
+function scoreAll(){
+  data.forEach(o=>{
+    let s=0,w=0;
+    for(const k in SIGNALS){ const c=o.comp[k],wt=SIGNALS[k].w; if(c!=null&&wt>0&&needMet(SIGNALS[k].need)){s+=c*wt;w+=wt;} }
+    o.score=w?Math.round(s/w*100):0;
+    o.decision=o.flags.length?"Pass":o.score>=70?"Priority":o.score>=50?"Test":"Hold";
+  });
+}
+
+/* ---------- Loading ---------- */
+function loadGrid(grid,label){
+  const {recs,err,header}=gridToRecords(grid);
+  if(err){status(err);return;}
+  if(!recs.length){status("No creator rows found under the header.");return;}
+  data=recs; enrich(); buildUI(header); page=0; render();
+  status(`${data.length} creators loaded from ${label}`);
+}
+function loadFile(file){
+  const ext=file.name.split(".").pop().toLowerCase();
+  const rd=new FileReader();
+  if(ext==="xlsx"||ext==="xls"){
+    if(!window.XLSX){status("Excel reader still loading. Try again in a second, or save as CSV.");return;}
+    rd.onload=()=>{
+      const wb=XLSX.read(new Uint8Array(rd.result),{type:"array"});
+      let best=null;
+      for(const n of wb.SheetNames){
+        const g=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:""});
+        const h=findHeader(g);
+        if(h>=0&&(!best||g.length>best.g.length)) best={g,n};
+      }
+      if(!best){status("No sheet with a recognisable header row.");return;}
+      loadGrid(best.g,`${file.name} (sheet: ${best.n})`);
+    };
+    rd.readAsArrayBuffer(file);
+  } else { rd.onload=()=>loadGrid(parseCSV(rd.result),file.name); rd.readAsText(file); }
+}
+function status(t){$("status").textContent=t;}
+
+/* ---------- UI building ---------- */
+function uniq(k){return [...new Set(data.map(d=>d[k]).filter(v=>v&&v!=="-"))].sort();}
+function chips(el,items,set){
+  el.innerHTML="";
+  items.forEach(it=>{
+    const id=typeof it==="string"?it:it.id,label=typeof it==="string"?it:it.label;
+    const b=document.createElement("span");b.className="chip";b.textContent=label;b.tabIndex=0;
+    const toggle=()=>{set.has(id)?set.delete(id):set.add(id);b.classList.toggle("on");page=0;render();};
+    b.onclick=toggle;b.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}};
+    el.appendChild(b);
+  });
+}
+const SELECTS=[["niche","Niche","All niches"],["region","Region","All regions"],["country","Country","All countries"],["language","Language","All languages"],["account_type","Account type","All types"],["status","Status","All statuses"]];
+const METRICS=["followers","avg_views","engagement_rate","cpm","smart_followers","kol_score","farmer_score","audience_fit","brand_safety"];
+const METRIC_LABEL=k=>k==="cpm"?"CPM $":FIELDS[k].label;
+
+function buildUI(header){
+  for(const k in sel) sel[k].clear();
+  const plats=uniq("platform"),types=[...new Set(data.flatMap(d=>d.typesArr))].sort();
+  $("platformField").hidden=plats.length<2; chips($("platformChips"),plats,sel.platform);
+  $("tierField").hidden=!has("followers"); chips($("tierChips"),TIERS,sel.tier);
+  $("typesField").hidden=!types.length; chips($("typesChips"),types,sel.types);
+
+  const s=$("selects");s.innerHTML="";
+  SELECTS.forEach(([k,lab,all])=>{
+    const vals=uniq(k); if(vals.length<2) return;
+    const f=document.createElement("div");f.className="field";
+    f.innerHTML=`<label for="sel_${k}">${lab}</label>`;
+    const se=document.createElement("select");se.id="sel_"+k;se.dataset.k=k;
+    se.append(new Option(all,""));vals.forEach(v=>se.append(new Option(v,v)));
+    se.onchange=()=>{page=0;render();};f.appendChild(se);s.appendChild(f);
+  });
+
+  const m=$("metricFilters");m.innerHTML="";
+  METRICS.filter(k=>data.some(d=>d[k]!=null)).forEach(k=>{
+    const f=document.createElement("div");f.className="field";
+    const lab=METRIC_LABEL(k);
+    f.innerHTML=`<span class="lbl">${lab}</span><div class="row2"><input type="number" step="any" placeholder="min" aria-label="${lab} min" data-k="${k}" data-b="min"><input type="number" step="any" placeholder="max" aria-label="${lab} max" data-k="${k}" data-b="max"></div>`;
+    f.querySelectorAll("input").forEach(i=>i.oninput=()=>{page=0;render();});
+    m.appendChild(f);
+  });
+  const sf=document.createElement("div");sf.className="field";
+  sf.innerHTML=`<label for="scoreMin">Min score</label><input type="number" id="scoreMin" min="0" max="100" placeholder="0">`;
+  sf.querySelector("input").oninput=()=>{page=0;render();};m.appendChild(sf);
+
+  const recog=header.filter(c=>ALIAS[norm(c)]).length;
+  $("detected").textContent=`Detected ${recog} of ${header.filter(c=>!blank(c)).length} columns: ${[...present].filter(k=>FIELDS[k]).join(", ")}.`;
+  buildWeights();
+}
+function buildWeights(){
+  const w=$("weights");w.innerHTML="";
+  let any=false;
+  for(const k in SIGNALS){
+    if(!needMet(SIGNALS[k].need)) continue; any=true;
+    const f=document.createElement("div");f.className="field";
+    f.innerHTML=`<label>${SIGNALS[k].label}</label>`;
+    const wrap=document.createElement("div");wrap.className="slider";
+    const r=document.createElement("input");r.type="range";r.min=0;r.max=50;r.value=SIGNALS[k].w;r.setAttribute("aria-label",SIGNALS[k].label+" weight");
+    const s=document.createElement("span");s.textContent=SIGNALS[k].w;
+    r.oninput=()=>{SIGNALS[k].w=+r.value;s.textContent=r.value;render();};
+    wrap.append(r,s);f.appendChild(wrap);w.appendChild(f);
+  }
+  if(!any) w.innerHTML=`<p class="hint">No scoring columns found. Add audience_fit, engagement_rate, rate_usd, smart_followers or similar.</p>`;
+}
+
+/* ---------- Filtering and rendering ---------- */
+function filtered(){
+  const q=$("q").value.trim().toLowerCase(),hide=$("hideFlags").checked;
+  const selects=[...document.querySelectorAll("#selects select")].filter(s=>s.value).map(s=>[s.dataset.k,s.value]);
+  const bounds=[...document.querySelectorAll("#metricFilters input[data-k]")].filter(i=>i.value!=="").map(i=>[i.dataset.k,i.dataset.b,parseFloat(i.value)]);
+  const smin=num($("scoreMin")?.value);
+  return data.filter(d=>{
+    if(q&&!`${d.name} ${d.handle} ${d.bio||""} ${d.notes||""} ${d.niche||""} ${d.types||""}`.toLowerCase().includes(q)) return false;
+    if(sel.platform.size&&!sel.platform.has(d.platform)) return false;
+    if(sel.tier.size&&!sel.tier.has(d.tier)) return false;
+    if(sel.types.size&&!d.typesArr.some(t=>sel.types.has(t))) return false;
+    for(const [k,v] of selects) if(d[k]!==v) return false;
+    for(const [k,b,v] of bounds){ const x=d[k]; if(x==null) return false; if(b==="min"&&x<v) return false; if(b==="max"&&x>v) return false; }
+    if(smin!=null&&d.score<smin) return false;
+    if(hide&&d.flags.length) return false;
+    return true;
+  });
+}
+function fmt(n,dec){
+  if(n==null) return "n/a";
+  if(dec!=null) return n.toFixed(dec);
+  const a=Math.abs(n);
+  if(a>=1e9) return (n/1e9).toFixed(1)+"B";
+  if(a>=1e6) return (n/1e6).toFixed(1)+"M";
+  if(a>=1e4) return Math.round(n/1e3)+"K";
+  if(a>=1e3) return (n/1e3).toFixed(1)+"K";
+  if(a>=10||n===Math.round(n)) return String(Math.round(n));
+  if(a>=0.01) return n.toFixed(2);
+  return n.toPrecision(2);
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function safeUrl(u){return /^https?:\/\//i.test(u||"")?u:"";}
+
+function columns(){
+  const c=[{k:"name",t:"Creator"}];
+  if(has("platform")&&uniq("platform").length>1) c.push({k:"platform",t:"Platform"});
+  if(has("tier")) c.push({k:"tier",t:"Tier"});
+  if(has("niche")) c.push({k:"niche",t:"Niche"});
+  else if(has("types")) c.push({k:"types",t:"Type",wrap:1});
+  if(has("region")||has("country")) c.push({k:has("region")?"region":"country",t:has("region")?"Region":"Country"});
+  [["followers"],["avg_views"],["engagement_rate",1],["cpm",1],["smart_followers"],["kol_score",0],["farmer_score",2],["audience_fit"]].forEach(([k,d])=>{
+    if(data.some(x=>x[k]!=null)) c.push({k,t:METRIC_LABEL(k),n:1,dec:d});
+  });
+  c.push({k:"score",t:"Score",n:1},{k:"decision",t:"Call"});
+  return c;
+}
+function render(){
+  scoreAll();
+  const cols=columns();
+  viewRows=filtered().sort((a,b)=>{
+    const x=a[sortKey],y=b[sortKey];
+    if(x==null||x==="")return 1; if(y==null||y==="")return -1;
+    return (typeof x==="number"?x-y:String(x).localeCompare(String(y)))*sortDir;
+  });
+  const pages=Math.max(1,Math.ceil(viewRows.length/PAGE)); page=Math.min(page,pages-1);
+  $("headRow").innerHTML=cols.map(h=>`<th data-k="${h.k}" class="${h.n?"num":""} ${sortKey===h.k?"sorted":""}" scope="col">${h.t}${sortKey===h.k?(sortDir>0?" ↑":" ↓"):""}</th>`).join("");
+  document.querySelectorAll("#headRow th").forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k,c=cols.find(h=>h.k===k); if(sortKey===k) sortDir*=-1; else {sortKey=k;sortDir=c.n?-1:1;}
+    render();
+  });
+  const body=$("body");
+  if(!data.length) body.innerHTML=`<tr><td colspan="${cols.length}" class="empty">Upload a CSV or Excel file, or load the sample data, to start.</td></tr>`;
+  else if(!viewRows.length) body.innerHTML=`<tr><td colspan="${cols.length}" class="empty">No creators match these filters.</td></tr>`;
+  else body.innerHTML=viewRows.slice(page*PAGE,(page+1)*PAGE).map(d=>"<tr>"+cols.map(c=>{
+    if(c.k==="name"){ const u=safeUrl(d.url); const nm=u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(d.name)}</a>`:esc(d.name);
+      return `<td class="name"><b>${nm}</b><small>${esc(d.handle&&d.handle!==d.name?d.handle:"")}</small></td>`; }
+    if(c.k==="tier") return `<td>${d.tier?`<span class="tag">${d.tier}</span>`:""}</td>`;
+    if(c.k==="score") return `<td class="num"><span class="score"><span class="bar"><i style="width:${d.score}%"></i></span>${d.score}</span></td>`;
+    if(c.k==="decision"){ const cls={Pass:"flag",Priority:"dec-scale",Test:"dec-test"}[d.decision]||""; const t=d.flags.length?` title="${esc(d.flags.join(", "))}"`:"";
+      return `<td><span class="tag ${cls}"${t}>${d.decision}</span></td>`; }
+    if(c.k==="types") return `<td class="wrap">${esc(d.typesArr.join(", "))}</td>`;
+    if(c.n) return `<td class="num">${fmt(d[c.k],c.dec)}</td>`;
+    return `<td>${esc(d[c.k])}</td>`;
+  }).join("")+"</tr>").join("");
+  $("pageInfo").textContent=viewRows.length?`${page*PAGE+1} to ${Math.min((page+1)*PAGE,viewRows.length)} of ${viewRows.length}`:"";
+  $("prevBtn").disabled=page===0; $("nextBtn").disabled=page>=pages-1;
+  $("prevBtn").hidden=$("nextBtn").hidden=pages<=1;
+
+  $("sCount").textContent=viewRows.length;
+  $("sReach").textContent=fmt(viewRows.reduce((s,d)=>s+(d.followers||0),0));
+  const priced=viewRows.filter(d=>d.rate_usd!=null&&d.avg_views),pv=priced.reduce((s,d)=>s+d.avg_views,0);
+  if(pv){$("sMid").textContent="$"+(priced.reduce((s,d)=>s+d.rate_usd,0)/pv*1000).toFixed(1);$("sMidLbl").textContent="blended CPM";}
+  else if(has("smart_followers")){$("sMid").textContent=fmt(viewRows.reduce((s,d)=>s+(d.smart_followers||0),0));$("sMidLbl").textContent="combined smart followers";}
+  else {$("sMid").textContent=viewRows.filter(d=>d.flags.length).length;$("sMidLbl").textContent="red-flagged";}
+  const sc=viewRows.map(d=>d.score).sort((a,b)=>a-b);
+  $("sScore").textContent=sc.length?sc[Math.floor(sc.length/2)]:"n/a";
+}
+
+/* ---------- Export, template, wiring ---------- */
+function csvCell(v){v=v==null?"":String(v);return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;}
+function download(name,text){
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"text/csv"}));
+  a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
+$("uploadBtn").onclick=()=>$("fileInput").click();
+$("fileInput").onchange=e=>{const f=e.target.files[0];if(f)loadFile(f);e.target.value="";};
+$("sampleBtn").onclick=()=>loadGrid(parseCSV(SAMPLE_CSV),"sample data");
+$("templateBtn").onclick=()=>{
+  const cols=["name","handle","platform","url","niche","creator_types","region","language","followers","avg_views","engagement_rate","smart_followers","farmer_score","audience_fit","content_quality","brand_safety","rate_usd","contact","notes"];
+  download("kol-template.csv",cols.join(",")+"\nJane Example,@jane_example,YouTube,https://youtube.com/@jane_example,AI tools,Educator,North America,EN,250000,40000,3.2,,0.02,4,4,5,1200,jane@example.com,Prefers performance hybrid\n");
+};
+$("exportBtn").onclick=()=>{
+  if(!viewRows.length){status("Nothing to export yet.");return;}
+  const base=Object.keys(FIELDS).filter(has);
+  const cols=[...base,"tier","cpm","score","decision","flags"].filter((c,i,a)=>a.indexOf(c)===i);
+  const out=[cols.join(",")].concat(viewRows.map(d=>cols.map(c=>csvCell(c==="cpm"&&d.cpm!=null?d.cpm.toFixed(2):c==="flags"?d.flags.join("; "):d[c])).join(",")));
+  download("kol-shortlist.csv",out.join("\n"));status(`Exported ${viewRows.length} creators`);
+};
+$("prevBtn").onclick=()=>{page--;render();};
+$("nextBtn").onclick=()=>{page++;render();};
+$("q").oninput=()=>{page=0;render();};
+$("hideFlags").onchange=()=>{page=0;render();};
+$("resetBtn").onclick=()=>{
+  $("q").value="";$("hideFlags").checked=true;
+  document.querySelectorAll("#selects select").forEach(s=>s.value="");
+  document.querySelectorAll("#metricFilters input").forEach(i=>i.value="");
+  for(const k in sel) sel[k].clear();
+  document.querySelectorAll(".chip.on").forEach(c=>c.classList.remove("on"));
+  page=0;render();
+};
+$("themeBtn").onclick=()=>{
+  const r=document.documentElement;
+  const dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme=dark?"light":"dark";
+  try{localStorage.setItem("kol-theme",r.dataset.theme);}catch(e){}
+};
+try{const t=localStorage.getItem("kol-theme");if(t)document.documentElement.dataset.theme=t;}catch(e){}
+
+loadGrid(parseCSV(SAMPLE_CSV),"sample data");
+</script>
+</body>
+</html>
