@@ -64,10 +64,4 @@ A zero-to-one operating plan, written to be used on day 1 and refined with data 
 
 Open `index.html` in any browser. No build step, no install.
 
-## Author
-
-Nika Muraveva, growth and KOL partnerships lead with 9 years across consumer tech and Web3. Built and ran a creator network of 4,000 creators with a hand-picked VIP tier of 100 KOLs.
-
-X: [@murmurnika_](https://x.com/murmurnika_)
-
 *All sample data in this repo is fictional.*
